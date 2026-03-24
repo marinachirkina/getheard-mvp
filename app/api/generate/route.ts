@@ -21,7 +21,7 @@ function extractSection(text: string, startLabel: string, endLabel?: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { problem, duration, impact } = await req.json();
+    const { text } = await req.json();
 
     const prompt = `
 You are a patient advocacy assistant for UK healthcare.
@@ -55,14 +55,8 @@ You must produce TWO VERSIONS in EACH language:
 
 Use the information below:
 
-Problem:
-${problem}
-
-Duration:
-${duration}
-
-Impact / Main concern:
-${impact}
+Conversation:
+${text}
 
 Return exactly in this structure:
 
@@ -110,28 +104,27 @@ Important to mention:
       input: prompt,
     });
 
-    const text = response.output_text || '';
+    const outputText = response.output_text || '';
 
     const userLanguageRaw = extractSection(
-      text,
+      outputText,
       'USER LANGUAGE:',
       'BOOKING VERSION:'
-    ).replace(/\n/g, ' ').trim();
+    )
+      .replace(/\n/g, ' ')
+      .trim();
 
     const firstBooking = extractSection(
-      text,
+      outputText,
       'BOOKING VERSION:',
       'GP VERSION:'
     );
 
-    const firstGp = extractSection(
-      text,
-      'GP VERSION:',
-      'ENGLISH'
-    );
+    const firstGp = extractSection(outputText, 'GP VERSION:', 'ENGLISH');
 
-    const englishPartStart = text.indexOf('ENGLISH');
-    const englishPart = englishPartStart !== -1 ? text.slice(englishPartStart) : '';
+    const englishPartStart = outputText.indexOf('ENGLISH');
+    const englishPart =
+      englishPartStart !== -1 ? outputText.slice(englishPartStart) : '';
 
     const englishBooking = extractSection(
       englishPart,
@@ -139,10 +132,7 @@ Important to mention:
       'GP VERSION:'
     );
 
-    const englishGp = extractSection(
-      englishPart,
-      'GP VERSION:'
-    );
+    const englishGp = extractSection(englishPart, 'GP VERSION:');
 
     return NextResponse.json({
       userLanguage: userLanguageRaw || 'User language',
@@ -150,7 +140,7 @@ Important to mention:
       userLanguageGp: firstGp || '',
       englishBooking: englishBooking || '',
       englishGp: englishGp || '',
-      raw: text || 'No response generated.',
+      raw: outputText || 'No response generated.',
     });
   } catch (error) {
     console.error('OPENAI ERROR:', error);

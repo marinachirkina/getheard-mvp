@@ -2,7 +2,10 @@
 
 import { useState } from 'react';
 
-type Step = 1 | 2 | 3 | 4;
+type Message = {
+  role: 'user' | 'assistant';
+  content: string;
+};
 
 type OutputData = {
   userLanguage: string;
@@ -12,6 +15,8 @@ type OutputData = {
   englishGp: string;
   raw?: string;
 };
+
+type ViewMode = 'chat' | 'ready' | 'summary';
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -59,38 +64,92 @@ function ResultCard({
 }
 
 export default function Home() {
-  const [step, setStep] = useState<Step>(1);
-  const [problem, setProblem] = useState('');
-  const [duration, setDuration] = useState('');
-  const [impact, setImpact] = useState('');
-  const [output, setOutput] = useState<OutputData | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<ViewMode>('chat');
+  const [output, setOutput] = useState<OutputData | null>(null);
 
-  const isEnglish =
-    output?.userLanguage?.trim().toLowerCase().includes('english') ?? false;
+  async function handleSend() {
+    if (!input.trim()) return;
 
-  async function handleNext() {
-    if (step === 1 && !problem.trim()) return;
-    if (step === 2 && !duration.trim()) return;
-    if (step === 3 && !impact.trim()) return;
-
-    if (step < 3) {
-      setStep((prev) => (prev + 1) as Step);
-      return;
-    }
-
+    const newMessages = [...messages, { role: 'user', content: input }];
+    setMessages(newMessages);
+    setInput('');
     setLoading(true);
-    setOutput(null);
 
     try {
-      const res = await fetch('/api/generate', {
+      const combined = newMessages
+        .map((m) => `${m.role}: ${m.content}`)
+        .join('\n');
+
+      const res = await fetch('/api/next-question', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ problem, duration, impact }),
+        body: JSON.stringify({ text: combined }),
       });
 
       const data = await res.json();
 
+      if (data.ready) {
+        setMessages([
+          ...newMessages,
+          {
+            role: 'assistant',
+            content:
+              'I have enough information. You can generate your summary now.',
+          },
+        ]);
+        setMode('ready');
+      } else {
+        setMessages([
+          ...newMessages,
+          {
+            role: 'assistant',
+            content: data.question,
+          },
+        ]);
+        setMode('chat');
+      }
+    } catch {
+      setMessages([
+        ...newMessages,
+        {
+          role: 'assistant',
+          content: 'Could you tell me a bit more?',
+        },
+      ]);
+      setMode('chat');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function generateSummary() {
+    setLoading(true);
+
+    try {
+      const cleanedMessages =
+        messages[messages.length - 1]?.role === 'assistant' &&
+        messages[messages.length - 1]?.content.includes(
+          'I have enough information. You can generate your summary now.'
+        )
+          ? messages.slice(0, -1)
+          : messages;
+
+      const combined = cleanedMessages
+        .map((m) => `${m.role}: ${m.content}`)
+        .join('\n');
+
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: combined }),
+      });
+
+      const data = await res.json();
+
+      setMessages(cleanedMessages);
       setOutput({
         userLanguage: data.userLanguage,
         userLanguageBooking: data.userLanguageBooking,
@@ -99,8 +158,7 @@ export default function Home() {
         englishGp: data.englishGp,
         raw: data.raw,
       });
-
-      setStep(4);
+      setMode('summary');
     } catch {
       setOutput({
         userLanguage: 'Error',
@@ -110,110 +168,78 @@ export default function Home() {
         englishGp: '',
         raw: 'Something went wrong.',
       });
-      setStep(4);
+      setMode('summary');
     } finally {
       setLoading(false);
     }
   }
 
-  function handleRestart() {
-    setStep(1);
-    setProblem('');
-    setDuration('');
-    setImpact('');
-    setOutput(null);
+  function handleReset() {
+    setMessages([]);
+    setInput('');
     setLoading(false);
+    setMode('chat');
+    setOutput(null);
   }
 
-  return (
-    <main className="min-h-screen bg-slate-950 px-6 py-12 text-white">
-      <div className="mx-auto max-w-5xl">
-        <h1 className="mb-4 text-4xl font-bold">GetHeard</h1>
+  const isEnglish =
+    output?.userLanguage?.trim().toLowerCase().includes('english') ?? false;
 
-        <p className="mb-8 max-w-3xl text-slate-300">
-          Describe your problem in your own language. We will help you prepare
-          both a short booking version and a more detailed GP version, in your
-          language and in English.
+  return (
+    <main className="min-h-screen bg-slate-950 p-6 text-white">
+      <div className="mx-auto max-w-4xl">
+        <h1 className="mb-3 text-3xl font-bold">GetHeard</h1>
+
+        <p className="mb-6 max-w-3xl text-slate-300">
+          Describe your problem in your own language. We’ll ask a few smart
+          follow-up questions, then prepare a short booking version and a more
+          detailed GP version in your language and in English.
         </p>
 
-        {step === 1 && (
-          <div className="max-w-2xl space-y-4">
-            <label className="block text-lg font-medium">
-              1. What’s the problem?
-            </label>
-            <textarea
-              value={problem}
-              onChange={(e) => setProblem(e.target.value)}
-              placeholder="Write freely in your own language..."
-              className="h-40 w-full rounded-xl border border-slate-700 bg-slate-900 p-4"
-            />
+        {messages.length > 0 && (
+          <div className="mb-6 space-y-4">
+            {messages.map((m, i) => (
+              <div
+                key={i}
+                className={`rounded-2xl p-4 text-[18px] leading-8 ${
+                  m.role === 'user'
+                    ? 'bg-amber-400 text-black'
+                    : 'bg-slate-800 text-white'
+                }`}
+              >
+                {m.content}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {loading && (
+          <div className="mb-6 rounded-xl bg-slate-800 p-4 text-slate-300">
+            {mode === 'ready'
+              ? 'Preparing your summary...'
+              : 'Thinking about the best next question...'}
+          </div>
+        )}
+
+        {mode === 'ready' && !loading && (
+          <div className="mb-6 flex gap-3">
             <button
-              onClick={handleNext}
+              onClick={generateSummary}
               className="rounded-xl bg-amber-400 px-5 py-3 font-semibold text-black"
             >
-              Next
+              Generate summary
+            </button>
+
+            <button
+              onClick={handleReset}
+              className="rounded-xl bg-slate-700 px-5 py-3 font-semibold text-white"
+            >
+              Start again
             </button>
           </div>
         )}
 
-        {step === 2 && (
-          <div className="max-w-2xl space-y-4">
-            <label className="block text-lg font-medium">
-              2. How long has this been going on?
-            </label>
-            <textarea
-              value={duration}
-              onChange={(e) => setDuration(e.target.value)}
-              placeholder="Example: 3 days, 2 weeks, since yesterday..."
-              className="h-32 w-full rounded-xl border border-slate-700 bg-slate-900 p-4"
-            />
-            <div className="flex gap-3">
-              <button
-                onClick={() => setStep(1)}
-                className="rounded-xl bg-slate-700 px-5 py-3 font-semibold text-white"
-              >
-                Back
-              </button>
-              <button
-                onClick={handleNext}
-                className="rounded-xl bg-amber-400 px-5 py-3 font-semibold text-black"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
-
-        {step === 3 && (
-          <div className="max-w-2xl space-y-4">
-            <label className="block text-lg font-medium">
-              3. How is it affecting you / what worries you most?
-            </label>
-            <textarea
-              value={impact}
-              onChange={(e) => setImpact(e.target.value)}
-              placeholder="Example: getting worse, affecting sleep, hard to walk, worried because..."
-              className="h-32 w-full rounded-xl border border-slate-700 bg-slate-900 p-4"
-            />
-            <div className="flex gap-3">
-              <button
-                onClick={() => setStep(2)}
-                className="rounded-xl bg-slate-700 px-5 py-3 font-semibold text-white"
-              >
-                Back
-              </button>
-              <button
-                onClick={handleNext}
-                disabled={loading}
-                className="rounded-xl bg-amber-400 px-5 py-3 font-semibold text-black"
-              >
-                {loading ? 'Working...' : 'Generate summary'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {step === 4 && output && (
+        {mode === 'summary' && output && (
           <div className="space-y-6">
             {output.userLanguageBooking ||
             output.userLanguageGp ||
@@ -253,10 +279,27 @@ export default function Home() {
             )}
 
             <button
-              onClick={handleRestart}
+              onClick={handleReset}
               className="rounded-xl bg-amber-400 px-5 py-3 font-semibold text-black"
             >
               Start again
+            </button>
+          </div>
+        )}
+
+        {mode === 'chat' && !loading && (
+          <div className="flex gap-2">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Describe your situation..."
+              className="flex-1 rounded-xl bg-slate-800 p-4 text-white placeholder:text-slate-400"
+            />
+            <button
+              onClick={handleSend}
+              className="rounded-xl bg-amber-400 px-5 font-semibold text-black"
+            >
+              Send
             </button>
           </div>
         )}
