@@ -347,8 +347,14 @@ export default function Home() {
 
       const res = await fetch('/api/next-question', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: combined }),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-lang': detectedLang,
+        },
+        body: JSON.stringify({
+          text: combined,
+          language: detectedLang,
+        }),
       });
 
       const data = await res.json();
@@ -421,8 +427,14 @@ export default function Home() {
 
       const res = await fetch('/api/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: combined }),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-lang': conversationLang,
+        },
+        body: JSON.stringify({
+          text: combined,
+          language: conversationLang,
+        }),
       });
 
       const data = await res.json();

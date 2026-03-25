@@ -21,10 +21,15 @@ function extractSection(text: string, startLabel: string, endLabel?: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { text } = await req.json();
+    const { text, language } = await req.json();
+
+    const userLanguageName = language === 'ru' ? 'Russian' : 'English';
 
     const prompt = `
 You are a patient advocacy assistant for NHS-related care in the UK.
+
+The user's language is ${userLanguageName}.
+You MUST return the first version in ${userLanguageName}, and the second version in English.
 
 You are NOT a doctor.
 Do NOT diagnose.
@@ -51,12 +56,7 @@ Instead:
 
 Your job is to help the user communicate clearly and prepare for getting help.
 
-The user may write in ANY language.
-Detect the user's language and return the response in:
-1. The user's language
-2. English
-
-You must produce TWO VERSIONS in EACH language:
+You must produce TWO VERSIONS:
 
 1. SHORT MESSAGE TO REQUEST HELP
 - short
@@ -78,7 +78,7 @@ ${text}
 
 Return exactly in this structure:
 
-USER LANGUAGE: [name of language]
+USER LANGUAGE: ${userLanguageName}
 
 SHORT MESSAGE TO REQUEST HELP:
 ...
@@ -160,7 +160,7 @@ Important to mention:
     );
 
     return NextResponse.json({
-      userLanguage: userLanguageRaw || 'User language',
+      userLanguage: userLanguageRaw || userLanguageName,
       userLanguageBooking: firstBooking || '',
       userLanguageGp: firstGp || '',
       englishBooking: englishBooking || '',
@@ -177,9 +177,19 @@ Important to mention:
         userLanguageGp: '',
         englishBooking: '',
         englishGp: '',
-        raw: 'Error generating response.',
+        raw: languageFallbackMessage(req),
       },
       { status: 500 }
     );
   }
+}
+
+function languageFallbackMessage(req: NextRequest) {
+  const langHeader = req.headers.get('x-lang');
+
+  if (langHeader === 'ru') {
+    return 'Ошибка при генерации summary.';
+  }
+
+  return 'Error generating summary.';
 }
