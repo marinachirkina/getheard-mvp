@@ -26,8 +26,6 @@ const copy = {
       'Built for NHS care in the UK. Describe the health issue in your own language. We will help prepare a short message to request help and a more detailed version for the appointment, in your language and in English.',
     inputPlaceholder: 'Describe your situation...',
     send: 'Send',
-    thinkingQuestion: 'Thinking about the best next question...',
-    thinkingSummary: 'Preparing your summary...',
     generate: 'Generate summary',
     restart: 'Start again',
     shortTitle: 'Short message to request help',
@@ -43,6 +41,10 @@ const copy = {
     pharmacyDesc:
       'You may be able to get help quickly without an appointment',
     nhs111Desc: 'Get advice if you are unsure what to do',
+    heroHelpText:
+      'This is the main text you can copy and use to contact a service.',
+    copyMessage: 'Copy message',
+    copiedReady: 'Copied — ready to send',
   },
   ru: {
     title: 'GetHeard',
@@ -50,8 +52,6 @@ const copy = {
       'Создано для NHS в Великобритании. Опишите проблему со здоровьем на своём языке. Мы поможем подготовить короткий текст для записи/обращения и более подробную версию для приёма — на вашем языке и на английском.',
     inputPlaceholder: 'Опишите вашу ситуацию...',
     send: 'Отправить',
-    thinkingQuestion: 'Подбираю следующий уточняющий вопрос...',
-    thinkingSummary: 'Готовлю summary...',
     generate: 'Сформировать summary',
     restart: 'Начать заново',
     shortTitle: 'Короткий текст для обращения',
@@ -63,12 +63,23 @@ const copy = {
     nextStepsTitle: 'Что делать дальше',
     nextStepsUrgentNote:
       'Если состояние ухудшается или становится срочным, обратитесь в A&E или позвоните 999.',
-    gpDesc: 'Запишитесь к GP, если проблема продолжается и не требует экстренной помощи',
+    gpDesc:
+      'Запишитесь к GP, если проблема продолжается и не требует экстренной помощи',
     pharmacyDesc:
       'В некоторых случаях фармацевт может помочь быстрее и без записи',
-    nhs111Desc: 'Если вы не уверены, что делать дальше, можно обратиться в NHS 111',
+    nhs111Desc:
+      'Если вы не уверены, что делать дальше, можно обратиться в NHS 111',
+    heroHelpText:
+      'Это основной текст, который можно скопировать и использовать для обращения.',
+    copyMessage: 'Скопировать текст',
+    copiedReady: 'Скопировано — можно отправлять',
   },
 };
+
+function detectUserLanguage(messages: Message[]): UiLang {
+  const text = messages.map((m) => m.content).join(' ');
+  return /[а-яё]/i.test(text) ? 'ru' : 'en';
+}
 
 function CopyButton({
   text,
@@ -117,7 +128,7 @@ function ResultCard({
   showCopy?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
+    <div className="w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
       <div className="mb-3 flex items-start justify-between gap-4">
         <div>
           <h3 className="text-lg font-semibold">{title}</h3>
@@ -129,44 +140,6 @@ function ResultCard({
       <div className="whitespace-pre-wrap text-slate-100 leading-7">{text}</div>
     </div>
   );
-}
-
-function getCareOptions(output: OutputData | null, t: typeof copy.en) {
-  if (!output) return [];
-
-  const text = `${output.userLanguageGp} ${output.englishGp}`.toLowerCase();
-  const options: { key: string; title: string; desc: string }[] = [];
-
-  options.push({
-    key: 'gp',
-    title: 'GP',
-    desc: t.gpDesc,
-  });
-
-  if (
-    text.includes('pain') ||
-    text.includes('cough') ||
-    text.includes('ear') ||
-    text.includes('rash') ||
-    text.includes('fever') ||
-    text.includes('sore throat') ||
-    text.includes('sinus') ||
-    text.includes('bite')
-  ) {
-    options.push({
-      key: 'pharmacy',
-      title: 'Pharmacy',
-      desc: t.pharmacyDesc,
-    });
-  }
-
-  options.push({
-    key: '111',
-    title: 'NHS 111',
-    desc: t.nhs111Desc,
-  });
-
-  return options;
 }
 
 function parseDetailedSections(text: string) {
@@ -292,6 +265,44 @@ function DetailedResultCard({
   );
 }
 
+function getCareOptions(output: OutputData | null, t: (typeof copy)['en']) {
+  if (!output) return [];
+
+  const text = `${output.userLanguageGp} ${output.englishGp}`.toLowerCase();
+  const options: { key: string; title: string; desc: string }[] = [];
+
+  options.push({
+    key: 'gp',
+    title: 'GP',
+    desc: t.gpDesc,
+  });
+
+  if (
+    text.includes('pain') ||
+    text.includes('cough') ||
+    text.includes('ear') ||
+    text.includes('rash') ||
+    text.includes('fever') ||
+    text.includes('sore throat') ||
+    text.includes('sinus') ||
+    text.includes('bite')
+  ) {
+    options.push({
+      key: 'pharmacy',
+      title: 'Pharmacy',
+      desc: t.pharmacyDesc,
+    });
+  }
+
+  options.push({
+    key: '111',
+    title: 'NHS 111',
+    desc: t.nhs111Desc,
+  });
+
+  return options;
+}
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -299,6 +310,7 @@ export default function Home() {
   const [mode, setMode] = useState<ViewMode>('chat');
   const [output, setOutput] = useState<OutputData | null>(null);
   const [uiLang, setUiLang] = useState<UiLang>('en');
+  const [conversationLang, setConversationLang] = useState<UiLang>('en');
   const [nonHealth, setNonHealth] = useState(false);
   const [showUserLanguageCards, setShowUserLanguageCards] = useState(false);
 
@@ -320,6 +332,9 @@ export default function Home() {
       ...messages,
       { role: 'user', content: input },
     ];
+
+    const detectedLang = detectUserLanguage(newMessages);
+    setConversationLang(detectedLang);
 
     setMessages(newMessages);
     setInput('');
@@ -354,9 +369,9 @@ export default function Home() {
           {
             role: 'assistant' as const,
             content:
-              uiLang === 'ru'
-                ? 'Информации уже достаточно. Можно сформировать summary.'
-                : 'I have enough information. You can generate your summary now.',
+              detectedLang === 'ru'
+                ? 'Похоже, информации уже достаточно — можно сформировать summary.'
+                : 'Looks like we have enough information — you can generate your summary now.',
           },
         ]);
         setNonHealth(false);
@@ -378,7 +393,7 @@ export default function Home() {
         {
           role: 'assistant' as const,
           content:
-            uiLang === 'ru'
+            detectedLang === 'ru'
               ? 'Можете рассказать чуть подробнее?'
               : 'Could you tell me a bit more?',
         },
@@ -396,7 +411,7 @@ export default function Home() {
     try {
       const cleanedMessages =
         messages[messages.length - 1]?.role === 'assistant' &&
-        messages[messages.length - 1]?.content.toLowerCase().includes('generate')
+        /summary|сформировать/i.test(messages[messages.length - 1]?.content)
           ? messages.slice(0, -1)
           : messages;
 
@@ -447,6 +462,7 @@ export default function Home() {
     setOutput(null);
     setNonHealth(false);
     setShowUserLanguageCards(false);
+    setConversationLang(uiLang);
   }
 
   const isEnglish =
@@ -480,7 +496,13 @@ export default function Home() {
 
         {loading && (
           <div className="mb-6 rounded-xl bg-slate-800 p-4 text-slate-300">
-            {mode === 'ready' ? t.thinkingSummary : t.thinkingQuestion}
+            {mode === 'ready'
+              ? conversationLang === 'ru'
+                ? 'Готовлю summary...'
+                : 'Preparing your summary...'
+              : conversationLang === 'ru'
+                ? 'Подбираю следующий уточняющий вопрос...'
+                : 'Thinking about the best next question...'}
           </div>
         )}
 
@@ -513,16 +535,12 @@ export default function Home() {
                   </div>
                   <CopyButton
                     text={output.englishBooking}
-                    label="Copy message"
-                    successText="Copied — ready to send"
+                    label={t.copyMessage}
+                    successText={t.copiedReady}
                   />
                 </div>
 
-                <div className="mb-3 text-sm text-slate-300">
-                  {uiLang === 'ru'
-                    ? 'Это основной текст, который можно скопировать и использовать для обращения.'
-                    : 'This is the main text you can copy and use to contact a service.'}
-                </div>
+                <div className="mb-3 text-sm text-slate-300">{t.heroHelpText}</div>
 
                 <div className="whitespace-pre-wrap text-slate-100 leading-7">
                   {output.englishBooking}
