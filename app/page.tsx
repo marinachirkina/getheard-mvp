@@ -123,7 +123,11 @@ export default function Home() {
   async function handleSend() {
     if (!input.trim()) return;
 
-    const newMessages = [...messages, { role: 'user', content: input }];
+    const newMessages: Message[] = [
+      ...messages,
+      { role: 'user', content: input },
+    ];
+
     setMessages(newMessages);
     setInput('');
     setLoading(true);
@@ -145,7 +149,7 @@ export default function Home() {
         setMessages([
           ...newMessages,
           {
-            role: 'assistant',
+            role: 'assistant' as const,
             content:
               uiLang === 'ru'
                 ? 'Информации уже достаточно. Можно сформировать summary.'
@@ -157,7 +161,7 @@ export default function Home() {
         setMessages([
           ...newMessages,
           {
-            role: 'assistant',
+            role: 'assistant' as const,
             content: data.question,
           },
         ]);
@@ -167,7 +171,7 @@ export default function Home() {
       setMessages([
         ...newMessages,
         {
-          role: 'assistant',
+          role: 'assistant' as const,
           content:
             uiLang === 'ru'
               ? 'Можете рассказать чуть подробнее?'
