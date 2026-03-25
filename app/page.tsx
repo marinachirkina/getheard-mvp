@@ -108,6 +108,7 @@ export default function Home() {
   const [mode, setMode] = useState<ViewMode>('chat');
   const [output, setOutput] = useState<OutputData | null>(null);
   const [uiLang, setUiLang] = useState<UiLang>('en');
+  const [nonHealth, setNonHealth] = useState(false);
 
   useEffect(() => {
     const lang = navigator.language?.toLowerCase() || 'en';
@@ -145,7 +146,17 @@ export default function Home() {
 
       const data = await res.json();
 
-      if (data.ready) {
+      if (data.non_health) {
+        setMessages([
+          ...newMessages,
+          {
+            role: 'assistant' as const,
+            content: data.question,
+          },
+        ]);
+        setNonHealth(true);
+        setMode('chat');
+      } else if (data.ready) {
         setMessages([
           ...newMessages,
           {
@@ -156,6 +167,7 @@ export default function Home() {
                 : 'I have enough information. You can generate your summary now.',
           },
         ]);
+        setNonHealth(false);
         setMode('ready');
       } else {
         setMessages([
@@ -165,6 +177,7 @@ export default function Home() {
             content: data.question,
           },
         ]);
+        setNonHealth(false);
         setMode('chat');
       }
     } catch {
@@ -237,6 +250,7 @@ export default function Home() {
     setLoading(false);
     setMode('chat');
     setOutput(null);
+    setNonHealth(false);
   }
 
   const isEnglish =
@@ -351,7 +365,7 @@ export default function Home() {
           </div>
         )}
 
-        {mode === 'chat' && !loading && (
+        {mode === 'chat' && !loading && !nonHealth && (
           <div className="flex gap-2">
             <textarea
               autoFocus
@@ -373,6 +387,15 @@ export default function Home() {
               {t.send}
             </button>
           </div>
+        )}
+
+        {mode === 'chat' && !loading && nonHealth && (
+          <button
+            onClick={handleReset}
+            className="rounded-xl bg-amber-400 px-5 py-3 font-semibold text-black"
+          >
+            {t.restart}
+          </button>
         )}
       </div>
     </main>
