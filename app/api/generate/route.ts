@@ -24,34 +24,33 @@ export async function POST(req: NextRequest) {
     const { text } = await req.json();
 
     const prompt = `
-You are a patient advocacy assistant for UK healthcare.
+You are a patient advocacy assistant for NHS-related care in the UK.
 
 You are NOT a doctor.
 Do NOT diagnose.
-Do NOT suggest that the user has a specific condition.
-Your job is to help the user communicate clearly and prepare for NHS/GP interaction.
+Do NOT suggest diseases.
+
+Your job is to help the user communicate clearly and prepare for getting help.
 
 The user may write in ANY language.
-First, detect the user's language.
-Then return the response in TWO LANGUAGES:
-1. The user's original language
+Detect the user's language and return the response in:
+1. The user's language
 2. English
 
 You must produce TWO VERSIONS in EACH language:
 
-1. BOOKING VERSION
+1. SHORT MESSAGE TO REQUEST HELP
 - short
 - 1 to 2 sentences
-- concise, direct, weighty
-- suitable for requesting a GP appointment
-- should help the user sound clear and serious without exaggeration
+- concise, direct, serious
+- suitable for contacting a GP practice or requesting help
 
-2. GP VERSION
+2. DETAILED VERSION FOR THE APPOINTMENT
 - more detailed
 - structured
-- useful for speaking to the GP
-- include red flags or important details to mention if relevant
-- include useful questions to ask the GP
+- useful for speaking to a GP or clinician
+- include important details to mention
+- include useful questions to ask
 
 Use the information below:
 
@@ -62,13 +61,13 @@ Return exactly in this structure:
 
 USER LANGUAGE: [name of language]
 
-BOOKING VERSION:
+SHORT MESSAGE TO REQUEST HELP:
 ...
 
-GP VERSION:
+DETAILED VERSION FOR THE APPOINTMENT:
 Summary:
 ...
-What to say to the GP:
+What to say:
 ...
 Questions to ask:
 - ...
@@ -81,13 +80,13 @@ Important to mention:
 
 ENGLISH
 
-BOOKING VERSION:
+SHORT MESSAGE TO REQUEST HELP:
 ...
 
-GP VERSION:
+DETAILED VERSION FOR THE APPOINTMENT:
 Summary:
 ...
-What to say to the GP:
+What to say:
 ...
 Questions to ask:
 - ...
@@ -109,18 +108,22 @@ Important to mention:
     const userLanguageRaw = extractSection(
       outputText,
       'USER LANGUAGE:',
-      'BOOKING VERSION:'
+      'SHORT MESSAGE TO REQUEST HELP:'
     )
       .replace(/\n/g, ' ')
       .trim();
 
     const firstBooking = extractSection(
       outputText,
-      'BOOKING VERSION:',
-      'GP VERSION:'
+      'SHORT MESSAGE TO REQUEST HELP:',
+      'DETAILED VERSION FOR THE APPOINTMENT:'
     );
 
-    const firstGp = extractSection(outputText, 'GP VERSION:', 'ENGLISH');
+    const firstGp = extractSection(
+      outputText,
+      'DETAILED VERSION FOR THE APPOINTMENT:',
+      'ENGLISH'
+    );
 
     const englishPartStart = outputText.indexOf('ENGLISH');
     const englishPart =
@@ -128,11 +131,14 @@ Important to mention:
 
     const englishBooking = extractSection(
       englishPart,
-      'BOOKING VERSION:',
-      'GP VERSION:'
+      'SHORT MESSAGE TO REQUEST HELP:',
+      'DETAILED VERSION FOR THE APPOINTMENT:'
     );
 
-    const englishGp = extractSection(englishPart, 'GP VERSION:');
+    const englishGp = extractSection(
+      englishPart,
+      'DETAILED VERSION FOR THE APPOINTMENT:'
+    );
 
     return NextResponse.json({
       userLanguage: userLanguageRaw || 'User language',
